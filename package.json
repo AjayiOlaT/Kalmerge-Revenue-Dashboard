@@ -13,7 +13,8 @@
     "react-dom": "^19.2.0",
     "recharts": "^3.2.1",
     "html-to-image": "^1.11.13",
-    "@google/genai": "latest"
+    "@google/genai": "latest",
+    "@netlify/functions": "^4.2.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
