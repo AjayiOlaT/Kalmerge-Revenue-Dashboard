@@ -14,11 +14,6 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   upsellRate: 1,
 };
 
-export const FIXED_PRICING = {
-    basic: 9,
-    professional: 29
-};
-
 export const SECTIONS = [
     { id: 'summary', title: 'Executive Summary' },
     { id: 'pricing', title: 'Pricing & Feature Tiers' },
@@ -42,7 +37,7 @@ export const ASSUMPTION_TOOLTIPS = {
   upsellRate: 'The percentage of Basic plan customers who upgrade to the Professional plan each month. This is a key driver of MRR expansion.',
 };
 
-export const ONBOARDING_TOUR_STEPS: Omit<TourStep, 'preAction'>[] = [
+export const ONBOARDING_TOUR_STEPS: TourStep[] = [
   {
     elementId: 'header',
     title: 'Welcome to the Dashboard!',
@@ -52,6 +47,13 @@ export const ONBOARDING_TOUR_STEPS: Omit<TourStep, 'preAction'>[] = [
     elementId: 'main-nav',
     title: 'Easy Navigation',
     description: 'Use this navigation bar to quickly jump to different sections of the strategy report.',
+  },
+  {
+    elementId: 'pricing-table',
+    title: 'Editable Pricing',
+    description: 'This table isn\'t just for show. You can directly edit the prices for the Basic and Professional plans. Changes you make here will instantly update the financial projections.',
+    hasAnimation: 'click',
+    animationTargetId: 'editable-price-basic',
   },
   {
     elementId: 'assumptions-grid',

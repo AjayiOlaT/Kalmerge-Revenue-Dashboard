@@ -4,7 +4,7 @@ import * as htmlToImage from 'html-to-image';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useProjection } from './hooks/useProjection';
 import { useGemini } from './hooks/useGemini';
-import type { Assumptions, TourStep } from './types';
+import type { Assumptions, TourStep, EditablePrices } from './types';
 import { 
     DEFAULT_ASSUMPTIONS, 
     SECTIONS, 
@@ -34,7 +34,8 @@ type ChartType = 'line' | 'area' | 'bar' | 'pie';
 
 const App: React.FC = () => {
     const [assumptions, setAssumptions] = useLocalStorage<Assumptions>('kalmerge-assumptions', DEFAULT_ASSUMPTIONS);
-    const { projectionData, monthlyMetrics } = useProjection(assumptions);
+    const [editablePrices, setEditablePrices] = useState<EditablePrices>({ basic: 9, professional: 29 });
+    const { projectionData, monthlyMetrics } = useProjection(assumptions, editablePrices);
     const chartRef = useRef<HTMLDivElement>(null);
     const [visibleTableRows, setVisibleTableRows] = useState(12);
     const [activeChartType, setActiveChartType] = useState<ChartType>('line');
@@ -89,6 +90,13 @@ const App: React.FC = () => {
         });
     };
     
+    const handlePriceChange = (plan: 'basic' | 'professional', value: string) => {
+        const numericValue = parseFloat(value);
+        if (!isNaN(numericValue) && numericValue >= 0) {
+            setEditablePrices(prev => ({ ...prev, [plan]: numericValue }));
+        }
+    };
+
     const downloadChart = useCallback(() => {
         if (chartRef.current) {
             htmlToImage.toPng(chartRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 })
@@ -126,7 +134,7 @@ const App: React.FC = () => {
             setCurrentTourStepIndex(0);
             const firstStep = tour[0];
             if (firstStep.preAction?.type === 'switch_chart') {
-                setActiveChartType(firstStep.preAction.payload);
+                setActiveChartType(firstStep.preAction.payload as ChartType);
             }
             setTimeout(() => setIsTourActive(true), 100);
         }
@@ -136,7 +144,7 @@ const App: React.FC = () => {
         if (nextStepIndex < tourSteps.length) {
             const nextStep = tourSteps[nextStepIndex];
             if (nextStep.preAction?.type === 'switch_chart') {
-                setActiveChartType(nextStep.preAction.payload);
+                setActiveChartType(nextStep.preAction.payload as ChartType);
             }
             setCurrentTourStepIndex(nextStepIndex);
         }
@@ -146,7 +154,7 @@ const App: React.FC = () => {
         if (prevStepIndex >= 0) {
             const prevStep = tourSteps[prevStepIndex];
             if (prevStep.preAction?.type === 'switch_chart') {
-                setActiveChartType(prevStep.preAction.payload);
+                setActiveChartType(prevStep.preAction.payload as ChartType);
             }
             setCurrentTourStepIndex(prevStepIndex);
         }
@@ -172,6 +180,34 @@ const App: React.FC = () => {
         setIsOnboardingTourActive(false);
         setHasCompletedTour(true);
     };
+    
+    const handleAnimatePrice = useCallback(() => {
+        const originalPrice = 9;
+        const animationDuration = 5000; // 5s, matching CSS
+
+        // Times are slightly delayed from the CSS animation to ensure the 'click' visual happens first.
+        const incrementTimer = setTimeout(() => {
+            setEditablePrices(prev => ({ ...prev, basic: originalPrice + 1 }));
+        }, animationDuration * 0.30); // 1500ms
+
+        const decrementTimer = setTimeout(() => {
+            setEditablePrices(prev => ({ ...prev, basic: originalPrice - 1 }));
+        }, animationDuration * 0.80); // 4000ms
+
+        // A timer to ensure reset happens even if the animation loop in CSS is slightly off.
+        const finalResetTimer = setTimeout(() => {
+            setEditablePrices(prev => ({ ...prev, basic: originalPrice }));
+        }, animationDuration - 50);
+
+        const cleanup = () => {
+            clearTimeout(incrementTimer);
+            clearTimeout(decrementTimer);
+            clearTimeout(finalResetTimer);
+            setEditablePrices(prev => ({ ...prev, basic: originalPrice }));
+        };
+
+        return cleanup;
+    }, []);
 
     const arpa = useMemo(() => {
         if (monthlyMetrics.totalCustomers === 0) return 0;
@@ -213,7 +249,7 @@ const App: React.FC = () => {
                 </Section>
 
                 <Section id={SECTIONS[1].id} title={SECTIONS[1].title}>
-                    <div className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
+                    <div id="pricing-table" className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
                         <table className="min-w-full text-sm text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
@@ -221,7 +257,34 @@ const App: React.FC = () => {
                                     {PRICING_DATA.tiers.map(tier => (
                                         <th key={tier.name} className={`p-4 w-1/5 text-center ${tier.highlight ? 'bg-violet-100 rounded-t-lg' : ''}`}>
                                             <h3 className="text-lg font-bold text-dark">{tier.name}</h3>
-                                            <p className="text-2xl font-extrabold text-primary">{tier.price}</p>
+                                            
+                                            {tier.name === 'Basic Plan' ? (
+                                                <div className="relative inline-flex items-center justify-center my-1">
+                                                    <span className="text-2xl font-extrabold text-primary mr-1">$</span>
+                                                    <input 
+                                                        id="editable-price-basic"
+                                                        type="number"
+                                                        value={editablePrices.basic}
+                                                        onChange={(e) => handlePriceChange('basic', e.target.value)}
+                                                        className="w-20 bg-violet-100/50 text-center text-2xl font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-secondary rounded-md"
+                                                        aria-label="Basic Plan Price"
+                                                    />
+                                                </div>
+                                            ) : tier.name === 'Professional Plan' ? (
+                                                <div className="relative inline-flex items-center justify-center my-1">
+                                                    <span className="text-2xl font-extrabold text-primary mr-1">$</span>
+                                                    <input 
+                                                        type="number"
+                                                        value={editablePrices.professional}
+                                                        onChange={(e) => handlePriceChange('professional', e.target.value)}
+                                                        className="w-20 bg-violet-100 text-center text-2xl font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-secondary rounded-md"
+                                                        aria-label="Professional Plan Price"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <p className="text-2xl font-extrabold text-primary my-1">{tier.price}</p>
+                                            )}
+
                                             <p className="text-xs text-gray-500">{tier.priceDetails}</p>
                                         </th>
                                     ))}
@@ -387,6 +450,7 @@ const App: React.FC = () => {
                     onNext={handleNextOnboardingStep}
                     onPrev={handlePrevOnboardingStep}
                     onFinish={handleFinishOnboardingTour}
+                    onAnimateStep={handleAnimatePrice}
                  />
             )}
         </div>

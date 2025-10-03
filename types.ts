@@ -35,10 +35,19 @@ export interface TourStep {
   elementId: string;
   title: string;
   description: string;
+  // For AI Tour
   preAction?: {
     type: 'switch_chart';
     payload: 'line' | 'area' | 'bar' | 'pie';
   };
+  // For Onboarding Tour
+  hasAnimation?: 'click';
+  animationTargetId?: string;
+}
+
+export interface EditablePrices {
+    basic: number;
+    professional: number;
 }
 
 // FIX: Add missing PricingPlan interface, which was causing an error in components/PricingCard.tsx

@@ -1,10 +1,6 @@
-import React, { useState, useLayoutEffect, useRef } from 'react';
-
-interface TourStep {
-  elementId: string;
-  title: string;
-  description: string;
-}
+import React, { useState, useLayoutEffect, useRef, useEffect } from 'react';
+import type { TourStep } from '../types';
+import ClickAnimator from './ClickAnimator';
 
 interface OnboardingTourProps {
     steps: TourStep[];
@@ -12,11 +8,13 @@ interface OnboardingTourProps {
     onNext: () => void;
     onPrev: () => void;
     onFinish: () => void;
+    onAnimateStep: () => () => void;
 }
 
-const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onNext, onPrev, onFinish }) => {
+const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onNext, onPrev, onFinish, onAnimateStep }) => {
     const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({ opacity: 0 });
     const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({ opacity: 0 });
+    const [animationRect, setAnimationRect] = useState<DOMRect | null>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
 
     const step = steps[currentStep];
@@ -24,6 +22,7 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
     useLayoutEffect(() => {
         setHighlightStyle(prev => ({ ...prev, opacity: 0 }));
         setPopoverStyle(prev => ({ ...prev, opacity: 0 }));
+        setAnimationRect(null);
 
         const targetElement = document.getElementById(step.elementId);
 
@@ -68,6 +67,15 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
                         left: `${popoverLeft}px`,
                     });
                 }
+                
+                if (step.hasAnimation === 'click' && step.animationTargetId) {
+                    const animationTarget = document.getElementById(step.animationTargetId);
+                    if (animationTarget) {
+                        setAnimationRect(animationTarget.getBoundingClientRect());
+                    }
+                } else {
+                    setAnimationRect(null);
+                }
             }
         };
 
@@ -83,10 +91,24 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
                 window.removeEventListener('resize', updatePositions);
             };
         }
-    }, [step.elementId]);
+    }, [step]);
+    
+    useEffect(() => {
+        let cleanupAnimation: (() => void) | undefined;
+        if (step?.hasAnimation === 'click') {
+            cleanupAnimation = onAnimateStep();
+        }
+
+        return () => {
+            if (cleanupAnimation) {
+                cleanupAnimation();
+            }
+        };
+    }, [step, onAnimateStep]);
     
     return (
         <div className="fixed inset-0 z-50">
+            {animationRect && <ClickAnimator targetRect={animationRect} />}
             <div style={highlightStyle}></div>
             <div
                 ref={popoverRef}

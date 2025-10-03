@@ -1,9 +1,7 @@
-
 import { useMemo } from 'react';
-import type { Assumptions, ProjectionDataPoint } from '../types';
-import { FIXED_PRICING } from '../constants';
+import type { Assumptions, ProjectionDataPoint, EditablePrices } from '../types';
 
-export function useProjection(assumptions: Assumptions) {
+export function useProjection(assumptions: Assumptions, prices: EditablePrices) {
     const projectionData = useMemo(() => {
         const data: ProjectionDataPoint[] = [];
         let basicCustomers = 0;
@@ -42,8 +40,8 @@ export function useProjection(assumptions: Assumptions) {
             entCustomers += newEnt;
 
             // Calculate MRR
-            const basicMRR = basicCustomers * assumptions.basicAvgUsers * FIXED_PRICING.basic;
-            const proMRR = proCustomers * assumptions.proAvgUsers * FIXED_PRICING.professional;
+            const basicMRR = basicCustomers * assumptions.basicAvgUsers * prices.basic;
+            const proMRR = proCustomers * assumptions.proAvgUsers * prices.professional;
             const entMRR = entCustomers * assumptions.enterpriseAvgMRR;
             const totalMRR = basicMRR + proMRR + entMRR;
             
@@ -64,7 +62,7 @@ export function useProjection(assumptions: Assumptions) {
             });
         }
         return data;
-    }, [assumptions]);
+    }, [assumptions, prices]);
     
     const monthlyMetrics = useMemo(() => {
         const lastMonth = projectionData[projectionData.length - 1];
