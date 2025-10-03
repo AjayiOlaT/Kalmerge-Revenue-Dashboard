@@ -13,7 +13,7 @@ interface OnboardingTourProps {
 
 const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onNext, onPrev, onFinish, onAnimateStep }) => {
     const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({ opacity: 0 });
-    const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({ opacity: 0 });
+    const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({ opacity: 0, transform: 'scale(0.95)' });
     const [animationRect, setAnimationRect] = useState<DOMRect | null>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -21,13 +21,12 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
 
     useLayoutEffect(() => {
         setHighlightStyle(prev => ({ ...prev, opacity: 0 }));
-        setPopoverStyle(prev => ({ ...prev, opacity: 0 }));
         setAnimationRect(null);
 
         const targetElement = document.getElementById(step.elementId);
 
         const updatePositions = () => {
-            if (targetElement) {
+            if (targetElement && popoverRef.current) {
                 const rect = targetElement.getBoundingClientRect();
                 const padding = 10;
 
@@ -44,29 +43,47 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
                     zIndex: 1000,
                     pointerEvents: 'none',
                 });
+                
+                const popoverEl = popoverRef.current;
+                const popoverWidth = popoverEl.offsetWidth;
+                const popoverHeight = popoverEl.offsetHeight;
 
-                if (popoverRef.current) {
-                    const popoverRect = popoverRef.current.getBoundingClientRect();
-                    let popoverTop = rect.bottom + 15;
-                    let popoverLeft = rect.left + rect.width / 2 - popoverRect.width / 2;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const margin = 15; // Space from viewport edges and target element
 
-                    if (popoverTop + popoverRect.height > window.innerHeight) {
-                        popoverTop = rect.top - popoverRect.height - 15;
-                    }
-                    if (popoverLeft + popoverRect.width > window.innerWidth) {
-                        popoverLeft = window.innerWidth - popoverRect.width - 15;
-                    }
-                    if (popoverLeft < 15) {
-                        popoverLeft = 15;
-                    }
+                // --- Vertical Placement Logic ---
+                let popoverTop = rect.bottom + margin; // Preferred position: below
+                let transformOriginY = 'top';
 
-                    setPopoverStyle({
-                        opacity: 1,
-                        transform: 'translateY(0)',
-                        top: `${popoverTop}px`,
-                        left: `${popoverLeft}px`,
-                    });
+                // If it doesn't fit below, try placing it above.
+                if (popoverTop + popoverHeight > viewportHeight - margin) {
+                    popoverTop = rect.top - popoverHeight - margin;
+                    transformOriginY = 'bottom';
                 }
+                
+                // As a final fallback, clamp it to be within the viewport.
+                if (popoverTop < margin) {
+                    popoverTop = margin;
+                }
+                if (popoverTop + popoverHeight > viewportHeight - margin) {
+                    popoverTop = viewportHeight - popoverHeight - margin;
+                }
+                
+                // --- Horizontal Placement Logic ---
+                let popoverLeft = rect.left + rect.width / 2 - popoverWidth / 2;
+                
+                // Clamp to stay within viewport.
+                popoverLeft = Math.max(margin, popoverLeft);
+                popoverLeft = Math.min(popoverLeft, viewportWidth - popoverWidth - margin);
+
+                setPopoverStyle({
+                    opacity: 1,
+                    top: `${popoverTop}px`,
+                    left: `${popoverLeft}px`,
+                    transform: 'scale(1)',
+                    transformOrigin: `${transformOriginY} center`,
+                });
                 
                 if (step.hasAnimation === 'click' && step.animationTargetId) {
                     const animationTarget = document.getElementById(step.animationTargetId);
@@ -80,7 +97,10 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
         };
 
         if (targetElement) {
-            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+             // Hide popover immediately before calculations
+            setPopoverStyle(prev => ({ ...prev, opacity: 0, transform: 'scale(0.95)' }));
+            
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             
             const timer = setTimeout(updatePositions, 350);
 
@@ -115,9 +135,7 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
                 style={{
                     position: 'absolute',
                     zIndex: 1001,
-                    opacity: 0,
-                    transform: 'translateY(10px)',
-                    transition: 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out, top 0.3s ease-in-out, left 0.3s ease-in-out',
+                    transition: 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out',
                     ...popoverStyle
                 }}
                 className="w-80 max-w-[90vw] bg-white rounded-lg shadow-2xl p-5"
