@@ -4,12 +4,11 @@ import * as htmlToImage from 'html-to-image';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useProjection } from './hooks/useProjection';
 import { useGemini } from './hooks/useGemini';
-import type { Assumptions, TourStep, EditablePrices, PricingTableData, Tier, Feature } from './types';
+import type { Assumptions, TourStep, EditablePrices, PricingTableData, Tier, Feature, ChartType } from './types';
 import { 
     DEFAULT_ASSUMPTIONS, 
     SECTIONS, 
     DEFAULT_PRICING_DATA, 
-    CONVERSION_PATH_STRATEGY, 
     GROWTH_METRICS_KPIS, 
     LONG_TERM_VISION,
     GROWTH_METRICS_DEFINITIONS,
@@ -21,16 +20,13 @@ import Header from './components/Header';
 import Navbar from './components/Navbar';
 import Section from './components/Section';
 import SliderInput from './components/SliderInput';
-import MRRLineChart from './components/ProjectionChart';
 import ProjectionTable from './components/ProjectionTable';
-import CustomerCompositionPieChart from './components/CustomerCompositionPieChart';
-import NewVsChurnedBarChart from './components/NewVsChurnedBarChart';
-import MRRCompositionAreaChart from './components/MRRCompositionAreaChart';
 import AIGuidedTour from './components/AIGuidedTour';
 import OnboardingTour from './components/OnboardingTour';
 import StatCard from './components/StatCard';
+import ConversionPath from './components/ConversionPath';
+import ChartTabsController from './components/ChartTabsController';
 
-type ChartType = 'line' | 'area' | 'bar' | 'pie';
 
 const App: React.FC = () => {
     const [assumptions, setAssumptions] = useLocalStorage<Assumptions>('kalmerge-assumptions', DEFAULT_ASSUMPTIONS);
@@ -276,13 +272,6 @@ const App: React.FC = () => {
         "Upsell/Cross-sell Rate": "yellow",
     }), [cltv, monthlyMetrics.totalMRR, assumptions.monthlyChurnRate, assumptions.freeToPaidConversion]);
 
-    const chartTabs: { id: ChartType; label: string }[] = [
-        { id: 'line', label: 'MRR Growth' },
-        { id: 'area', label: 'MRR Composition' },
-        { id: 'bar', label: 'Customer Flow' },
-        { id: 'pie', label: 'Final Customer Mix' },
-    ];
-    
     const inputClasses = "bg-transparent hover:bg-violet-100/50 focus:bg-white w-full p-1 rounded focus:outline-none focus:ring-2 focus:ring-secondary transition-colors";
 
 
@@ -291,7 +280,7 @@ const App: React.FC = () => {
             <Header onStartTour={startOnboardingTour} />
             <Navbar />
             <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="text-center mb-16">
+                <div className="text-center mb-12 md:mb-16">
                     <h1 className="text-4xl font-extrabold text-dark tracking-tight sm:text-5xl">
                         Interactive Revenue Projection Planner
                     </h1>
@@ -332,8 +321,14 @@ const App: React.FC = () => {
                 </Section>
 
                 <Section id={SECTIONS[1].id} title={SECTIONS[1].title}>
+                     <div className="md:hidden text-sm text-gray-500 mb-2 text-center">
+                        <span className="inline-flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                            Scroll to see all plans
+                        </span>
+                    </div>
                     <div id="pricing-table" className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
-                        <table className="min-w-full text-sm text-left">
+                        <table className="min-w-[700px] md:min-w-full text-sm text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     <th className="p-4 w-1/5">Feature</th>
@@ -441,18 +436,10 @@ const App: React.FC = () => {
                 </Section>
                 
                 <Section id={SECTIONS[2].id} title={SECTIONS[2].title}>
-                    <p className="text-lg text-gray-700 mb-8 leading-relaxed">{CONVERSION_PATH_STRATEGY}</p>
-                    <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4">
-                        {['Discovery (Free)', 'Triggering Upgrade Needs', 'Conversion', 'Onboarding to Paid'].map((step, index, arr) => (
-                             <React.Fragment key={step}>
-                                <div className="flex flex-col items-center text-center">
-                                    <div className="bg-primary rounded-full w-24 h-24 flex items-center justify-center text-white font-bold text-4xl mb-2 shadow-lg">{index + 1}</div>
-                                    <h3 className="font-semibold text-lg text-dark">{step}</h3>
-                                </div>
-                                {index < arr.length - 1 && <div className="text-4xl text-secondary font-light hidden md:block">→</div>}
-                             </React.Fragment>
-                        ))}
-                    </div>
+                    <p className="text-lg text-gray-700 mb-8 leading-relaxed max-w-4xl mx-auto text-center">
+                        Our strategy employs a feature-gated freemium model to showcase value and create clear incentives for upgrading. This interactive path details the user's journey from free discovery to becoming a valued paid customer.
+                    </p>
+                    <ConversionPath />
                 </Section>
 
                 <Section id={SECTIONS[3].id} title={SECTIONS[3].title}>
@@ -472,8 +459,8 @@ const App: React.FC = () => {
                         </div>
                      </div>
                      <div className="mt-8">
-                        <div className="flex justify-end space-x-4 mb-4">
-                            <button id="explain-ai-button" onClick={handleExplainClick} disabled={isGenerating} className="bg-accent hover:bg-violet-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        <div className="flex flex-col sm:flex-row sm:justify-end sm:items-center gap-3 mb-4">
+                            <button id="explain-ai-button" onClick={handleExplainClick} disabled={isGenerating} className="bg-accent hover:bg-violet-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isGenerating ? (
                                     <>
                                         <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -484,34 +471,31 @@ const App: React.FC = () => {
                                     </>
                                 ) : '✨ Explain with AI'}
                             </button>
-                            <div id="download-buttons" className="flex space-x-4">
+                             <div id="download-buttons" className="flex flex-col sm:flex-row gap-3">
                                 <button onClick={downloadChart} className="bg-primary hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Download Chart</button>
                                 <button onClick={downloadData} className="bg-secondary hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Download Data</button>
                             </div>
                         </div>
                         {generationError && <div className="text-red-500 bg-red-100 p-3 rounded-lg mb-4 text-center">{generationError}</div>}
-                        <div id="charts-container" ref={chartRef} className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                            <div className="flex justify-center flex-wrap gap-2 mb-6 border-b border-gray-200 pb-4">
-                                {chartTabs.map(tab => (
-                                    <button 
-                                        key={tab.id}
-                                        onClick={() => setActiveChartType(tab.id)}
-                                        className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary ${
-                                            activeChartType === tab.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-violet-100 hover:text-primary'
-                                        }`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </div>
-                            
-                            {activeChartType === 'line' && <MRRLineChart data={projectionData} />}
-                            {activeChartType === 'area' && <MRRCompositionAreaChart data={projectionData} />}
-                            {activeChartType === 'bar' && <NewVsChurnedBarChart data={projectionData} />}
-                            {activeChartType === 'pie' && <CustomerCompositionPieChart data={projectionData[projectionData.length - 1]} />}
+                        
+                        <div id="charts-container" ref={chartRef}>
+                            <ChartTabsController
+                                data={projectionData}
+                                activeChart={activeChartType}
+                                setActiveChart={setActiveChartType}
+                            />
                         </div>
-                        <div id="projection-table" className="mt-8 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                             <ProjectionTable data={projectionData.slice(0, visibleTableRows)} />
+
+                        <div id="projection-table" className="mt-8">
+                            <div className="md:hidden text-sm text-gray-500 mb-2 text-center">
+                                <span className="inline-flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                    Scroll to see all data
+                                </span>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-x-auto">
+                                <ProjectionTable data={projectionData.slice(0, visibleTableRows)} />
+                            </div>
                              {visibleTableRows < projectionData.length && (
                                 <div className="mt-6 text-center">
                                     <button onClick={handleShowMore} className="bg-secondary hover:bg-violet-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">

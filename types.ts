@@ -31,6 +31,9 @@ export interface MonthlyMetrics {
   totalCustomers: number;
 }
 
+export type ChartType = 'line' | 'area' | 'bar' | 'pie';
+
+
 export interface TourStep {
   elementId: string;
   title: string;
@@ -38,7 +41,7 @@ export interface TourStep {
   // For AI Tour
   preAction?: {
     type: 'switch_chart';
-    payload: 'line' | 'area' | 'bar' | 'pie';
+    payload: ChartType;
   };
   // For Onboarding Tour
   hasAnimation?: 'click';

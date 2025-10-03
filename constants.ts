@@ -109,9 +109,24 @@ export const DEFAULT_PRICING_DATA: PricingTableData = {
     ]
 };
 
-export const CONVERSION_PATH_STRATEGY = `
-    The free-to-paid conversion path for Kalmerge will be designed to showcase the immediate value of the product's core features while creating clear incentives and friction points that encourage upgrades to paid tiers. Our strategy employs a feature-gated freemium model, where essential functionalities are accessible for free, but advanced capabilities, increased capacity, and collaboration features are reserved for paid subscriptions. We attract users with a genuinely useful free tier. As their needs grow, they encounter natural limitations that highlight the value of our paid plans. In-app prompts and targeted campaigns will guide users towards the plan that best solves their evolving challenges.
-`;
+export const CONVERSION_PATH_STEPS = [
+  {
+    title: 'Discovery (Free)',
+    description: 'Users are attracted by a genuinely useful free tier. They can explore core features like basic record merging and calendar integration, experiencing the product\'s immediate value without any commitment.'
+  },
+  {
+    title: 'Triggering Upgrade Needs',
+    description: 'As users\' needs grow, they encounter natural, feature-gated limitations. This could be needing more CRM integrations, team collaboration features, or advanced booking page branding, which highlights the value of our paid plans.'
+  },
+  {
+    title: 'Conversion',
+    description: 'Strategic in-app prompts and targeted email campaigns guide users towards the plan that best solves their evolving challenges. The process is frictionless, clearly showing the ROI of upgrading.'
+  },
+  {
+    title: 'Onboarding to Paid',
+    description: 'Once converted, users experience a seamless transition. New features are unlocked with guided tours, and they receive priority support to ensure they maximize the value of their subscription, solidifying retention.'
+  }
+];
 
 export const GROWTH_METRICS_DEFINITIONS = {
     cltv: `Customer Lifetime Value (CLTV) is a crucial metric that estimates the total revenue a business can reasonably expect from a single customer account over the duration of their relationship. A high CLTV relative to CAC signifies a sustainable business model and healthy growth potential. A healthy CLTV justifies continued investment in marketing, sales, and product development.`,

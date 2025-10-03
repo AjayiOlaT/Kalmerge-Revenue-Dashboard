@@ -42,36 +42,34 @@ const CustomerCompositionPieChart: React.FC<CustomerCompositionPieChartProps> = 
     return (
         <>
             <h3 className="text-xl font-bold mb-4 text-center text-dark">Customer Composition (Month 36)</h3>
-            <div style={{ width: '100%', height: 400 }}>
-                <ResponsiveContainer>
-                    <PieChart>
-                        <Pie
-                            data={pieData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={renderCustomizedLabel}
-                            outerRadius={150}
-                            fill="#8884d8"
-                            dataKey="value"
-                            nameKey="name"
-                        >
-                            {pieData.map((entry) => (
-                                <Cell key={`cell-${entry.name}`} fill={entry.color} />
-                            ))}
-                        </Pie>
-                        <Tooltip
-                            contentStyle={{ 
-                                backgroundColor: '#ffffff', 
-                                border: '1px solid #e5e7eb', 
-                                borderRadius: '0.5rem',
-                            }}
-                            formatter={(value: number, name: string) => [`${value.toLocaleString()} Customers`, name]}
-                        />
-                        <Legend wrapperStyle={{ color: '#374151', paddingTop: '10px' }} />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
+            <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={renderCustomizedLabel}
+                        outerRadius={'80%'}
+                        fill="#8884d8"
+                        dataKey="value"
+                        nameKey="name"
+                    >
+                        {pieData.map((entry) => (
+                            <Cell key={`cell-${entry.name}`} fill={entry.color} />
+                        ))}
+                    </Pie>
+                    <Tooltip
+                        contentStyle={{ 
+                            backgroundColor: '#ffffff', 
+                            border: '1px solid #e5e7eb', 
+                            borderRadius: '0.5rem',
+                        }}
+                        formatter={(value: number, name: string) => [`${value.toLocaleString()} Customers`, name]}
+                    />
+                    <Legend wrapperStyle={{ color: '#374151', paddingTop: '10px' }} />
+                </PieChart>
+            </ResponsiveContainer>
         </>
     );
 };
