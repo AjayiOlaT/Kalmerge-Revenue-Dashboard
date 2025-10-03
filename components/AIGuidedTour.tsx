@@ -10,7 +10,6 @@ interface AIGuidedTourProps {
 }
 
 const AIGuidedTour: React.FC<AIGuidedTourProps> = ({ steps, currentStep, onNext, onPrev, onFinish }) => {
-    const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({ opacity: 0 });
     const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({ opacity: 0, transform: 'scale(0.95)' });
     const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -28,19 +27,16 @@ const AIGuidedTour: React.FC<AIGuidedTourProps> = ({ steps, currentStep, onNext,
 
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
-                const margin = 15; // Space from viewport edges and target element
+                const margin = 15;
 
-                // --- Vertical Placement Logic ---
-                let popoverTop = rect.bottom + margin; // Preferred position: below
+                let popoverTop = rect.bottom + margin;
                 let transformOriginY = 'top';
 
-                // If it doesn't fit below, try placing it above.
                 if (popoverTop + popoverHeight > viewportHeight - margin) {
                     popoverTop = rect.top - popoverHeight - margin;
                     transformOriginY = 'bottom';
                 }
                 
-                // As a final fallback, clamp it to be within the viewport.
                 if (popoverTop < margin) {
                     popoverTop = margin;
                 }
@@ -48,10 +44,8 @@ const AIGuidedTour: React.FC<AIGuidedTourProps> = ({ steps, currentStep, onNext,
                     popoverTop = viewportHeight - popoverHeight - margin;
                 }
 
-                // --- Horizontal Placement Logic ---
                 let popoverLeft = rect.left + rect.width / 2 - popoverWidth / 2;
                 
-                // Clamp to stay within viewport.
                 popoverLeft = Math.max(margin, popoverLeft);
                 popoverLeft = Math.min(popoverLeft, viewportWidth - popoverWidth - margin);
                 
@@ -66,11 +60,20 @@ const AIGuidedTour: React.FC<AIGuidedTourProps> = ({ steps, currentStep, onNext,
         };
 
         if (targetElement) {
-            // Hide popover immediately before calculations
             setPopoverStyle(prev => ({ ...prev, opacity: 0, transform: 'scale(0.95)' }));
             
-            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            const elementToScrollTo = targetElement.closest('section') || targetElement;
+            const navbar = document.getElementById('main-nav');
+            const navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+            const elementRect = elementToScrollTo.getBoundingClientRect();
+            const absoluteElementTop = elementRect.top + window.scrollY;
+            const offset = navbarHeight + 20; // 20px padding
             
+            window.scrollTo({
+                top: absoluteElementTop - offset,
+                behavior: 'smooth'
+            });
+
             const timer = setTimeout(updatePositions, 350);
             window.addEventListener('resize', updatePositions);
             
@@ -82,8 +85,8 @@ const AIGuidedTour: React.FC<AIGuidedTourProps> = ({ steps, currentStep, onNext,
     }, [step.elementId]);
     
     return (
-        <div className="fixed inset-0 z-50">
-            <div style={highlightStyle}></div>
+        <div className="fixed inset-0 z-50 pointer-events-none">
+            {/* Removed the background overlay for AI tour to simplify it */}
             <div
                 ref={popoverRef}
                 style={{
@@ -92,7 +95,7 @@ const AIGuidedTour: React.FC<AIGuidedTourProps> = ({ steps, currentStep, onNext,
                     transition: 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out',
                     ...popoverStyle
                 }}
-                className="w-80 max-w-[90vw] bg-white rounded-lg shadow-2xl p-5"
+                className="w-80 max-w-[90vw] bg-white rounded-lg shadow-2xl p-5 pointer-events-auto"
             >
                 <h3 className="text-lg font-bold text-primary mb-2">{step.title}</h3>
                 <p className="text-sm text-gray-700 mb-4">{step.description}</p>

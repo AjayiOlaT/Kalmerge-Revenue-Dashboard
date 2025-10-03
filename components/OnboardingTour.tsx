@@ -1,6 +1,7 @@
 import React, { useState, useLayoutEffect, useRef, useEffect } from 'react';
 import type { TourStep } from '../types';
 import ClickAnimator from './ClickAnimator';
+import AnimationSpotlight from './AnimationSpotlight';
 
 interface OnboardingTourProps {
     steps: TourStep[];
@@ -37,9 +38,9 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
                     left: `${rect.left - padding}px`,
                     width: `${rect.width + padding * 2}px`,
                     height: `${rect.height + padding * 2}px`,
-                    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.6)',
+                    boxShadow: step.hasAnimation ? '0 0 0 9999px rgba(15, 23, 42, 0.85)' : '0 0 0 9999px rgba(15, 23, 42, 0.75)',
                     borderRadius: '8px',
-                    transition: 'all 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                    transition: 'all 0.3s ease-in-out, opacity 0.3s ease-in-out, box-shadow 0.3s ease-in-out',
                     zIndex: 1000,
                     pointerEvents: 'none',
                 });
@@ -50,40 +51,43 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
 
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
-                const margin = 15; // Space from viewport edges and target element
+                const margin = 15;
 
-                // --- Vertical Placement Logic ---
-                let popoverTop = rect.bottom + margin; // Preferred position: below
-                let transformOriginY = 'top';
+                if (step.hasAnimation) {
+                    let popoverLeft = viewportWidth / 2 - popoverWidth / 2;
+                    let popoverTop = viewportHeight - popoverHeight - margin * 2;
 
-                // If it doesn't fit below, try placing it above.
-                if (popoverTop + popoverHeight > viewportHeight - margin) {
-                    popoverTop = rect.top - popoverHeight - margin;
-                    transformOriginY = 'bottom';
-                }
-                
-                // As a final fallback, clamp it to be within the viewport.
-                if (popoverTop < margin) {
-                    popoverTop = margin;
-                }
-                if (popoverTop + popoverHeight > viewportHeight - margin) {
-                    popoverTop = viewportHeight - popoverHeight - margin;
-                }
-                
-                // --- Horizontal Placement Logic ---
-                let popoverLeft = rect.left + rect.width / 2 - popoverWidth / 2;
-                
-                // Clamp to stay within viewport.
-                popoverLeft = Math.max(margin, popoverLeft);
-                popoverLeft = Math.min(popoverLeft, viewportWidth - popoverWidth - margin);
+                    setPopoverStyle({
+                        opacity: 1,
+                        top: `${popoverTop}px`,
+                        left: `${popoverLeft}px`,
+                        transform: 'scale(1)',
+                        transformOrigin: `bottom center`,
+                    });
+                } else {
+                    let popoverTop = rect.bottom + margin;
+                    let transformOriginY = 'top';
 
-                setPopoverStyle({
-                    opacity: 1,
-                    top: `${popoverTop}px`,
-                    left: `${popoverLeft}px`,
-                    transform: 'scale(1)',
-                    transformOrigin: `${transformOriginY} center`,
-                });
+                    if (popoverTop + popoverHeight > viewportHeight - margin) {
+                        popoverTop = rect.top - popoverHeight - margin;
+                        transformOriginY = 'bottom';
+                    }
+                    
+                    if (popoverTop < margin) popoverTop = margin;
+                    if (popoverTop + popoverHeight > viewportHeight - margin) popoverTop = viewportHeight - popoverHeight - margin;
+                    
+                    let popoverLeft = rect.left + rect.width / 2 - popoverWidth / 2;
+                    popoverLeft = Math.max(margin, popoverLeft);
+                    popoverLeft = Math.min(popoverLeft, viewportWidth - popoverWidth - margin);
+
+                    setPopoverStyle({
+                        opacity: 1,
+                        top: `${popoverTop}px`,
+                        left: `${popoverLeft}px`,
+                        transform: 'scale(1)',
+                        transformOrigin: `${transformOriginY} center`,
+                    });
+                }
                 
                 if (step.hasAnimation === 'click' && step.animationTargetId) {
                     const animationTarget = document.getElementById(step.animationTargetId);
@@ -97,10 +101,21 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
         };
 
         if (targetElement) {
-             // Hide popover immediately before calculations
             setPopoverStyle(prev => ({ ...prev, opacity: 0, transform: 'scale(0.95)' }));
             
-            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            const elementToScrollTo = targetElement.closest('section') || targetElement;
+            const navbar = document.getElementById('main-nav');
+            const navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+            const elementRect = elementToScrollTo.getBoundingClientRect();
+            const absoluteElementTop = elementRect.top + window.scrollY;
+            
+            const isHeader = step.elementId === 'header';
+            const offset = isHeader ? 0 : navbarHeight + 20;
+            
+            window.scrollTo({
+                top: isHeader ? 0 : absoluteElementTop - offset,
+                behavior: 'smooth'
+            });
             
             const timer = setTimeout(updatePositions, 350);
 
@@ -129,13 +144,14 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, currentStep, onN
     return (
         <div className="fixed inset-0 z-50">
             {animationRect && <ClickAnimator targetRect={animationRect} />}
+            {animationRect && <AnimationSpotlight targetRect={animationRect} />}
             <div style={highlightStyle}></div>
             <div
                 ref={popoverRef}
                 style={{
                     position: 'absolute',
-                    zIndex: 1001,
-                    transition: 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out',
+                    zIndex: 1003,
+                    transition: 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out, top 0.3s ease-in-out, left 0.3s ease-in-out',
                     ...popoverStyle
                 }}
                 className="w-80 max-w-[90vw] bg-white rounded-lg shadow-2xl p-5"

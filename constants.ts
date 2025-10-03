@@ -1,4 +1,4 @@
-import type { Assumptions, TourStep } from './types';
+import type { Assumptions, TourStep, PricingTableData } from './types';
 
 export const DEFAULT_ASSUMPTIONS: Assumptions = {
   newFreeSignups: 1000,
@@ -87,12 +87,7 @@ export const ONBOARDING_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-
-export const EXECUTIVE_SUMMARY = `
-    This report outlines a strategic path to sustainable revenue generation for Kalmerge, building upon the successful MVP launch. Our proposed strategy centers on a tiered subscription model based on data volume and advanced features, coupled with a compelling feature-gated freemium offering to drive user adoption and a clear conversion funnel. Financial projections indicate significant growth potential over the next six months, with a focus on optimizing Customer Acquisition Cost (CAC) and maximizing Customer Lifetime Value (CLTV) through robust retention and upsell strategies. Key Performance Indicators (KPIs) have been identified to ensure rigorous tracking and continuous optimization of our revenue objectives.
-`;
-
-export const PRICING_DATA = {
+export const DEFAULT_PRICING_DATA: PricingTableData = {
     tiers: [
         { name: 'Free Plan', price: '$0', priceDetails: 'Forever', cta: 'Get Started' },
         { name: 'Basic Plan', price: '$9', priceDetails: '/user/month', cta: 'Upgrade Now' },

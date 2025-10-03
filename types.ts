@@ -50,7 +50,6 @@ export interface EditablePrices {
     professional: number;
 }
 
-// FIX: Add missing PricingPlan interface, which was causing an error in components/PricingCard.tsx
 export interface PricingPlan {
     name: string;
     price: string;
@@ -62,4 +61,22 @@ export interface PricingPlan {
     }[];
     highlight?: boolean;
     cta: string;
+}
+
+export interface Tier {
+    name: string;
+    price: string;
+    priceDetails: string;
+    cta: string;
+    highlight?: boolean;
+}
+
+export interface Feature {
+    name: string;
+    values: string[];
+}
+
+export interface PricingTableData {
+    tiers: Tier[];
+    features: Feature[];
 }

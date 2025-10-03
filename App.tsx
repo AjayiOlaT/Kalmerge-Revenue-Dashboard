@@ -4,12 +4,11 @@ import * as htmlToImage from 'html-to-image';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useProjection } from './hooks/useProjection';
 import { useGemini } from './hooks/useGemini';
-import type { Assumptions, TourStep, EditablePrices } from './types';
+import type { Assumptions, TourStep, EditablePrices, PricingTableData, Tier, Feature } from './types';
 import { 
     DEFAULT_ASSUMPTIONS, 
     SECTIONS, 
-    EXECUTIVE_SUMMARY, 
-    PRICING_DATA, 
+    DEFAULT_PRICING_DATA, 
     CONVERSION_PATH_STRATEGY, 
     GROWTH_METRICS_KPIS, 
     LONG_TERM_VISION,
@@ -29,6 +28,7 @@ import NewVsChurnedBarChart from './components/NewVsChurnedBarChart';
 import MRRCompositionAreaChart from './components/MRRCompositionAreaChart';
 import AIGuidedTour from './components/AIGuidedTour';
 import OnboardingTour from './components/OnboardingTour';
+import StatCard from './components/StatCard';
 
 type ChartType = 'line' | 'area' | 'bar' | 'pie';
 
@@ -39,6 +39,8 @@ const App: React.FC = () => {
     const chartRef = useRef<HTMLDivElement>(null);
     const [visibleTableRows, setVisibleTableRows] = useState(12);
     const [activeChartType, setActiveChartType] = useState<ChartType>('line');
+
+    const [pricingData, setPricingData] = useLocalStorage<PricingTableData>('kalmerge-pricing-data', DEFAULT_PRICING_DATA);
 
     // AI Tour State
     const { generateExplanation, isLoading: isGenerating, error: generationError } = useGemini();
@@ -96,6 +98,49 @@ const App: React.FC = () => {
             setEditablePrices(prev => ({ ...prev, [plan]: numericValue }));
         }
     };
+    
+    const handleTierChange = (tierIndex: number, field: keyof Tier, value: string) => {
+        setPricingData(currentData => {
+            const updatedTiers = [...currentData.tiers];
+            updatedTiers[tierIndex] = { ...updatedTiers[tierIndex], [field]: value };
+            return { ...currentData, tiers: updatedTiers };
+        });
+    };
+    const handleFeatureNameChange = (featureIndex: number, value: string) => {
+         setPricingData(currentData => {
+            const updatedFeatures = [...currentData.features];
+            updatedFeatures[featureIndex] = { ...updatedFeatures[featureIndex], name: value };
+            return { ...currentData, features: updatedFeatures };
+        });
+    };
+    const handleFeatureValueChange = (featureIndex: number, valueIndex: number, value: string) => {
+         setPricingData(currentData => {
+            const updatedFeatures = [...currentData.features];
+            const newValues = [...updatedFeatures[featureIndex].values];
+            newValues[valueIndex] = value;
+            updatedFeatures[featureIndex] = { ...updatedFeatures[featureIndex], values: newValues };
+            return { ...currentData, features: updatedFeatures };
+        });
+    };
+    const handleAddFeature = () => {
+        setPricingData(currentData => ({
+            ...currentData,
+            features: [
+                ...currentData.features,
+                { name: 'New Feature', values: Array(currentData.tiers.length).fill('') }
+            ]
+        }));
+    };
+    const handleRemoveFeature = (featureIndex: number) => {
+        setPricingData(currentData => ({
+            ...currentData,
+            features: currentData.features.filter((_, i) => i !== featureIndex)
+        }));
+    };
+    const handleResetPricing = () => {
+        setPricingData(DEFAULT_PRICING_DATA);
+    };
+
 
     const downloadChart = useCallback(() => {
         if (chartRef.current) {
@@ -237,15 +282,53 @@ const App: React.FC = () => {
         { id: 'bar', label: 'Customer Flow' },
         { id: 'pie', label: 'Final Customer Mix' },
     ];
+    
+    const inputClasses = "bg-transparent hover:bg-violet-100/50 focus:bg-white w-full p-1 rounded focus:outline-none focus:ring-2 focus:ring-secondary transition-colors";
+
 
     return (
         <div className="bg-light text-dark min-h-screen font-sans">
             <Header onStartTour={startOnboardingTour} />
             <Navbar />
             <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="text-center mb-16">
+                    <h1 className="text-4xl font-extrabold text-dark tracking-tight sm:text-5xl">
+                        Interactive Revenue Projection Planner
+                    </h1>
+                    <p className="mt-4 max-w-3xl mx-auto text-xl text-gray-600">
+                        Welcome to your strategic planning tool. Adjust the assumptions below to dynamically model Kalmerge's growth trajectory and explore potential revenue outcomes in real-time.
+                    </p>
+                </div>
                 
                 <Section id={SECTIONS[0].id} title={SECTIONS[0].title}>
-                    <p className="text-lg text-gray-700 leading-relaxed">{EXECUTIVE_SUMMARY}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        <StatCard 
+                            title="Projected 36-Mo MRR"
+                            value={monthlyMetrics.totalMRR.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                            description="Total monthly recurring revenue after 3 years."
+                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+                        />
+                         <StatCard 
+                            title="Final Customer Count"
+                            value={monthlyMetrics.totalCustomers.toLocaleString()}
+                            description="Total active paying customers at month 36."
+                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.124-1.282-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.124-1.282.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+                        />
+                         <StatCard 
+                            title="Projected CLTV"
+                            value={cltv.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                            description="Estimated revenue from a single customer."
+                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
+                        />
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                        <h3 className="text-xl font-bold text-dark mb-3">Dynamic Strategic Overview</h3>
+                        <p className="text-lg text-gray-700 leading-relaxed">
+                            Building upon the successful MVP launch, this dynamic model projects a growth trajectory to <strong className="text-primary">{monthlyMetrics.totalMRR.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })} in MRR</strong> and <strong className="text-primary">{monthlyMetrics.totalCustomers.toLocaleString()} paying customers</strong> over 36 months.
+                            <br/><br/>
+                            The strategy centers on a tiered, feature-gated freemium model designed to maximize Customer Lifetime Value (CLTV), which currently stands at <strong className="text-primary">{cltv.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</strong> based on your assumptions. The key levers for success are a compelling free-to-paid conversion funnel and robust retention strategies to manage the projected <strong className="text-primary">{assumptions.monthlyChurnRate}% monthly churn rate</strong>. Use the sliders below to explore how changes in these core assumptions impact the overall forecast.
+                        </p>
+                    </div>
                 </Section>
 
                 <Section id={SECTIONS[1].id} title={SECTIONS[1].title}>
@@ -254,9 +337,15 @@ const App: React.FC = () => {
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     <th className="p-4 w-1/5">Feature</th>
-                                    {PRICING_DATA.tiers.map(tier => (
-                                        <th key={tier.name} className={`p-4 w-1/5 text-center ${tier.highlight ? 'bg-violet-100 rounded-t-lg' : ''}`}>
-                                            <h3 className="text-lg font-bold text-dark">{tier.name}</h3>
+                                    {pricingData.tiers.map((tier, tierIndex) => (
+                                        <th key={tierIndex} className={`p-4 w-1/5 text-center ${tier.highlight ? 'bg-violet-100 rounded-t-lg' : ''}`}>
+                                            <input 
+                                                type="text"
+                                                value={tier.name}
+                                                onChange={(e) => handleTierChange(tierIndex, 'name', e.target.value)}
+                                                className={`${inputClasses} text-lg font-bold text-dark text-center`}
+                                                aria-label={`${tier.name} name`}
+                                            />
                                             
                                             {tier.name === 'Basic Plan' ? (
                                                 <div className="relative inline-flex items-center justify-center my-1">
@@ -284,36 +373,70 @@ const App: React.FC = () => {
                                             ) : (
                                                 <p className="text-2xl font-extrabold text-primary my-1">{tier.price}</p>
                                             )}
-
-                                            <p className="text-xs text-gray-500">{tier.priceDetails}</p>
+                                             <input 
+                                                type="text"
+                                                value={tier.priceDetails}
+                                                onChange={(e) => handleTierChange(tierIndex, 'priceDetails', e.target.value)}
+                                                className={`${inputClasses} text-xs text-gray-500 text-center`}
+                                                aria-label={`${tier.name} price details`}
+                                            />
                                         </th>
                                     ))}
+                                    <th className="p-4 w-[50px]"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {PRICING_DATA.features.map(feature => (
-                                    <tr key={feature.name} className="border-b border-gray-200 last:border-b-0">
-                                        <td className="p-4 font-semibold text-gray-600">{feature.name}</td>
-                                        {feature.values.map((value, index) => (
-                                            <td key={index} className={`p-4 text-center text-gray-700 ${PRICING_DATA.tiers[index].highlight ? 'bg-violet-100/50' : ''}`}>
-                                                {value === 'No' ? <span className="text-red-500">No</span> : value}
+                                {pricingData.features.map((feature, featureIndex) => (
+                                    <tr key={featureIndex} className="border-b border-gray-200 last:border-b-0">
+                                        <td className="p-2 font-semibold text-gray-600">
+                                            <input 
+                                                type="text"
+                                                value={feature.name}
+                                                onChange={(e) => handleFeatureNameChange(featureIndex, e.target.value)}
+                                                className={inputClasses}
+                                                aria-label={`Feature name ${featureIndex + 1}`}
+                                            />
+                                        </td>
+                                        {feature.values.map((value, valueIndex) => (
+                                            <td key={valueIndex} className={`p-2 text-center text-gray-700 ${pricingData.tiers[valueIndex].highlight ? 'bg-violet-100/50' : ''}`}>
+                                                 <input 
+                                                    type="text"
+                                                    value={value}
+                                                    onChange={(e) => handleFeatureValueChange(featureIndex, valueIndex, e.target.value)}
+                                                    className={`${inputClasses} text-center`}
+                                                    aria-label={`Feature ${feature.name} for ${pricingData.tiers[valueIndex].name}`}
+                                                />
                                             </td>
                                         ))}
+                                        <td className={`p-2 text-center ${pricingData.tiers.some(t => t.highlight) ? 'bg-violet-100/50' : ''}`}>
+                                            <button onClick={() => handleRemoveFeature(featureIndex)} className="text-gray-400 hover:text-red-500 p-1 rounded-full transition-colors" aria-label={`Remove feature ${feature.name}`}>
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                                  <tr className="bg-transparent">
                                      <td></td>
-                                     {PRICING_DATA.tiers.map(tier => (
-                                         <td key={tier.name} className={`p-4 text-center ${tier.highlight ? 'bg-violet-100/50 rounded-b-lg' : ''}`}>
+                                     {pricingData.tiers.map((tier, tierIndex) => (
+                                         <td key={tierIndex} className={`p-4 text-center ${tier.highlight ? 'bg-violet-100/50 rounded-b-lg' : ''}`}>
                                              <button className={`w-full max-w-[150px] mx-auto py-2 font-bold rounded-lg transition-colors duration-300
                                                 ${tier.highlight ? 'bg-primary text-white hover:bg-violet-700' : 'bg-secondary text-white hover:bg-violet-600'}`}>
                                                  {tier.cta}
                                              </button>
                                          </td>
                                      ))}
+                                     <td></td>
                                  </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div className="mt-4 flex justify-end space-x-4">
+                        <button onClick={handleAddFeature} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                           + Add Feature
+                        </button>
+                        <button onClick={handleResetPricing} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                           Reset Pricing
+                        </button>
                     </div>
                 </Section>
                 
