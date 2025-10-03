@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import * as Recharts from 'recharts';
 import * as htmlToImage from 'html-to-image';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useProjection } from './hooks/useProjection';
 import { useGemini } from './hooks/useGemini';
@@ -26,15 +29,22 @@ import OnboardingTour from './components/OnboardingTour';
 import StatCard from './components/StatCard';
 import ConversionPath from './components/ConversionPath';
 import ChartTabsController from './components/ChartTabsController';
+import DownloadControl from './components/DownloadControl';
+import { DownloadIcon, FileCsvIcon, FilePdfIcon, ImageIcon } from './components/icons';
 
 
 const App: React.FC = () => {
     const [assumptions, setAssumptions] = useLocalStorage<Assumptions>('kalmerge-assumptions', DEFAULT_ASSUMPTIONS);
     const [editablePrices, setEditablePrices] = useState<EditablePrices>({ basic: 9, professional: 29 });
     const { projectionData, monthlyMetrics } = useProjection(assumptions, editablePrices);
-    const chartRef = useRef<HTMLDivElement>(null);
     const [visibleTableRows, setVisibleTableRows] = useState(12);
     const [activeChartType, setActiveChartType] = useState<ChartType>('line');
+
+    // Refs for downloading sections
+    const mainContentRef = useRef<HTMLDivElement>(null);
+    const pricingSectionRef = useRef<HTMLDivElement>(null);
+    const projectionsSectionRef = useRef<HTMLDivElement>(null);
+    const chartRef = useRef<HTMLDivElement>(null);
 
     const [pricingData, setPricingData] = useLocalStorage<PricingTableData>('kalmerge-pricing-data', DEFAULT_PRICING_DATA);
 
@@ -137,20 +147,48 @@ const App: React.FC = () => {
         setPricingData(DEFAULT_PRICING_DATA);
     };
 
-
-    const downloadChart = useCallback(() => {
-        if (chartRef.current) {
-            htmlToImage.toPng(chartRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 })
-                .then((dataUrl) => {
-                    const link = document.createElement('a');
-                    link.download = `kalmerge-projection-${activeChartType}.png`;
-                    link.href = dataUrl;
-                    link.click();
-                });
+    // --- Download Handlers ---
+    const downloadAsPng = useCallback(async (element: HTMLElement | null, filename: string) => {
+        if (element) {
+            try {
+                const dataUrl = await htmlToImage.toPng(element, { backgroundColor: '#F5F3FF', pixelRatio: 2 });
+                const link = document.createElement('a');
+                link.download = `${filename}.png`;
+                link.href = dataUrl;
+                link.click();
+            } catch (error) {
+                console.error('oops, something went wrong!', error);
+            }
         }
-    }, [activeChartType]);
+    }, []);
 
-    const downloadData = useCallback(() => {
+    const downloadAsPdf = useCallback(async (element: HTMLElement | null, filename: string) => {
+        if (element) {
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    backgroundColor: '#F5F3FF',
+                    useCORS: true,
+                    windowWidth: document.documentElement.scrollWidth,
+                    windowHeight: document.documentElement.scrollHeight,
+                });
+                const imgData = canvas.toDataURL('image/png');
+                
+                const pdf = new jsPDF({
+                    orientation: 'p',
+                    unit: 'px',
+                    format: [canvas.width, canvas.height],
+                });
+
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save(`${filename}.pdf`);
+            } catch (error) {
+                console.error('oops, something went wrong!', error);
+            }
+        }
+    }, []);
+
+    const downloadProjectionCsv = useCallback(() => {
         const headers = ['Month', 'MRR', 'Total Customers', 'New Customers', 'Churned Customers', 'Basic Customers', 'Pro Customers', 'Enterprise Customers', 'Basic MRR', 'Pro MRR', 'Enterprise MRR'];
         const rows = projectionData.map(d => [d.month, d.mrr, d.totalCustomers, d.newCustomers, d.churnedCustomers, d.basicCustomers, d.proCustomers, d.entCustomers, d.basicMRR, d.proMRR, d.entMRR].join(','));
         const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
@@ -162,6 +200,25 @@ const App: React.FC = () => {
         link.click();
         document.body.removeChild(link);
     }, [projectionData]);
+
+    const downloadPricingCsv = useCallback(() => {
+        const { tiers, features } = pricingData;
+        const headers = ['Feature', ...tiers.map(t => t.name)];
+        const priceRow = ['Price', ...tiers.map(t => `"${t.price}"`)];
+        const detailsRow = ['Details', ...tiers.map(t => `"${t.priceDetails}"`)];
+        const featureRows = features.map(f => [`"${f.name}"`, ...f.values.map(v => `"${v}"`)].join(','));
+        
+        const csvRows = [headers.join(','), priceRow.join(','), detailsRow.join(','), ...featureRows];
+        const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', 'kalmerge_pricing_tiers.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }, [pricingData]);
     
     const handleShowMore = () => {
         setVisibleTableRows(prev => Math.min(prev + 12, projectionData.length));
@@ -274,12 +331,28 @@ const App: React.FC = () => {
 
     const inputClasses = "bg-transparent hover:bg-violet-100/50 focus:bg-white w-full p-1 rounded focus:outline-none focus:ring-2 focus:ring-secondary transition-colors";
 
+    const reportDownloadOptions = [
+        { label: 'Download as PNG', icon: <ImageIcon />, action: () => downloadAsPng(mainContentRef.current, 'kalmerge-report') },
+        { label: 'Download as PDF', icon: <FilePdfIcon />, action: () => downloadAsPdf(mainContentRef.current, 'kalmerge-report') },
+    ];
+    
+    const pricingDownloadOptions = [
+        { label: 'Download Table (PNG)', icon: <ImageIcon />, action: () => downloadAsPng(pricingSectionRef.current, 'kalmerge-pricing-table') },
+        { label: 'Download Data (CSV)', icon: <FileCsvIcon />, action: () => downloadPricingCsv() },
+    ];
+
+    const projectionDownloadOptions = [
+        { label: 'Download Chart (PNG)', icon: <ImageIcon />, action: () => downloadAsPng(chartRef.current, `kalmerge-projection-${activeChartType}`) },
+        { label: 'Download Section (PNG)', icon: <ImageIcon />, action: () => downloadAsPng(projectionsSectionRef.current, 'kalmerge-projections-section') },
+        { label: 'Download Data (CSV)', icon: <FileCsvIcon />, action: () => downloadProjectionCsv() },
+    ];
+
 
     return (
         <div className="bg-light text-dark min-h-screen font-sans">
-            <Header onStartTour={startOnboardingTour} />
+            <Header onStartTour={startOnboardingTour} downloadOptions={reportDownloadOptions} />
             <Navbar />
-            <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main ref={mainContentRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="text-center mb-12 md:mb-16">
                     <h1 className="text-4xl font-extrabold text-dark tracking-tight sm:text-5xl">
                         Interactive Revenue Projection Planner
@@ -320,118 +393,124 @@ const App: React.FC = () => {
                     </div>
                 </Section>
 
-                <Section id={SECTIONS[1].id} title={SECTIONS[1].title}>
-                     <div className="md:hidden text-sm text-gray-500 mb-2 text-center">
-                        <span className="inline-flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                            Scroll to see all plans
-                        </span>
-                    </div>
-                    <div id="pricing-table" className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
-                        <table className="min-w-[700px] md:min-w-full text-sm text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th className="p-4 w-1/5">Feature</th>
-                                    {pricingData.tiers.map((tier, tierIndex) => (
-                                        <th key={tierIndex} className={`p-4 w-1/5 text-center ${tier.highlight ? 'bg-violet-100 rounded-t-lg' : ''}`}>
-                                            <input 
-                                                type="text"
-                                                value={tier.name}
-                                                onChange={(e) => handleTierChange(tierIndex, 'name', e.target.value)}
-                                                className={`${inputClasses} text-lg font-bold text-dark text-center`}
-                                                aria-label={`${tier.name} name`}
-                                            />
-                                            
-                                            {tier.name === 'Basic Plan' ? (
-                                                <div className="relative inline-flex items-center justify-center my-1">
-                                                    <span className="text-2xl font-extrabold text-primary mr-1">$</span>
-                                                    <input 
-                                                        id="editable-price-basic"
-                                                        type="number"
-                                                        value={editablePrices.basic}
-                                                        onChange={(e) => handlePriceChange('basic', e.target.value)}
-                                                        className="w-20 bg-violet-100/50 text-center text-2xl font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-secondary rounded-md"
-                                                        aria-label="Basic Plan Price"
-                                                    />
-                                                </div>
-                                            ) : tier.name === 'Professional Plan' ? (
-                                                <div className="relative inline-flex items-center justify-center my-1">
-                                                    <span className="text-2xl font-extrabold text-primary mr-1">$</span>
-                                                    <input 
-                                                        type="number"
-                                                        value={editablePrices.professional}
-                                                        onChange={(e) => handlePriceChange('professional', e.target.value)}
-                                                        className="w-20 bg-violet-100 text-center text-2xl font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-secondary rounded-md"
-                                                        aria-label="Professional Plan Price"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <p className="text-2xl font-extrabold text-primary my-1">{tier.price}</p>
-                                            )}
-                                             <input 
-                                                type="text"
-                                                value={tier.priceDetails}
-                                                onChange={(e) => handleTierChange(tierIndex, 'priceDetails', e.target.value)}
-                                                className={`${inputClasses} text-xs text-gray-500 text-center`}
-                                                aria-label={`${tier.name} price details`}
-                                            />
-                                        </th>
-                                    ))}
-                                    <th className="p-4 w-[50px]"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pricingData.features.map((feature, featureIndex) => (
-                                    <tr key={featureIndex} className="border-b border-gray-200 last:border-b-0">
-                                        <td className="p-2 font-semibold text-gray-600">
-                                            <input 
-                                                type="text"
-                                                value={feature.name}
-                                                onChange={(e) => handleFeatureNameChange(featureIndex, e.target.value)}
-                                                className={inputClasses}
-                                                aria-label={`Feature name ${featureIndex + 1}`}
-                                            />
-                                        </td>
-                                        {feature.values.map((value, valueIndex) => (
-                                            <td key={valueIndex} className={`p-2 text-center text-gray-700 ${pricingData.tiers[valueIndex].highlight ? 'bg-violet-100/50' : ''}`}>
-                                                 <input 
+                <Section 
+                    id={SECTIONS[1].id} 
+                    title={SECTIONS[1].title}
+                    controls={<DownloadControl label="Download" options={pricingDownloadOptions} />}
+                >
+                    <div ref={pricingSectionRef}>
+                        <div className="md:hidden text-sm text-gray-500 mb-2 text-center">
+                            <span className="inline-flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                Scroll to see all plans
+                            </span>
+                        </div>
+                        <div id="pricing-table" className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
+                            <table className="min-w-[700px] md:min-w-full text-sm text-left">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="p-4 w-1/5">Feature</th>
+                                        {pricingData.tiers.map((tier, tierIndex) => (
+                                            <th key={tierIndex} className={`p-4 w-1/5 text-center ${tier.highlight ? 'bg-violet-100 rounded-t-lg' : ''}`}>
+                                                <input 
                                                     type="text"
-                                                    value={value}
-                                                    onChange={(e) => handleFeatureValueChange(featureIndex, valueIndex, e.target.value)}
-                                                    className={`${inputClasses} text-center`}
-                                                    aria-label={`Feature ${feature.name} for ${pricingData.tiers[valueIndex].name}`}
+                                                    value={tier.name}
+                                                    onChange={(e) => handleTierChange(tierIndex, 'name', e.target.value)}
+                                                    className={`${inputClasses} text-lg font-bold text-dark text-center`}
+                                                    aria-label={`${tier.name} name`}
+                                                />
+                                                
+                                                {tier.name === 'Basic Plan' ? (
+                                                    <div className="relative inline-flex items-center justify-center my-1">
+                                                        <span className="text-2xl font-extrabold text-primary mr-1">$</span>
+                                                        <input 
+                                                            id="editable-price-basic"
+                                                            type="number"
+                                                            value={editablePrices.basic}
+                                                            onChange={(e) => handlePriceChange('basic', e.target.value)}
+                                                            className="w-20 bg-violet-100/50 text-center text-2xl font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-secondary rounded-md"
+                                                            aria-label="Basic Plan Price"
+                                                        />
+                                                    </div>
+                                                ) : tier.name === 'Professional Plan' ? (
+                                                    <div className="relative inline-flex items-center justify-center my-1">
+                                                        <span className="text-2xl font-extrabold text-primary mr-1">$</span>
+                                                        <input 
+                                                            type="number"
+                                                            value={editablePrices.professional}
+                                                            onChange={(e) => handlePriceChange('professional', e.target.value)}
+                                                            className="w-20 bg-violet-100 text-center text-2xl font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-secondary rounded-md"
+                                                            aria-label="Professional Plan Price"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-2xl font-extrabold text-primary my-1">{tier.price}</p>
+                                                )}
+                                                <input 
+                                                    type="text"
+                                                    value={tier.priceDetails}
+                                                    onChange={(e) => handleTierChange(tierIndex, 'priceDetails', e.target.value)}
+                                                    className={`${inputClasses} text-xs text-gray-500 text-center`}
+                                                    aria-label={`${tier.name} price details`}
+                                                />
+                                            </th>
+                                        ))}
+                                        <th className="p-4 w-[50px]"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pricingData.features.map((feature, featureIndex) => (
+                                        <tr key={featureIndex} className="border-b border-gray-200 last:border-b-0">
+                                            <td className="p-2 font-semibold text-gray-600">
+                                                <input 
+                                                    type="text"
+                                                    value={feature.name}
+                                                    onChange={(e) => handleFeatureNameChange(featureIndex, e.target.value)}
+                                                    className={inputClasses}
+                                                    aria-label={`Feature name ${featureIndex + 1}`}
                                                 />
                                             </td>
+                                            {feature.values.map((value, valueIndex) => (
+                                                <td key={valueIndex} className={`p-2 text-center text-gray-700 ${pricingData.tiers[valueIndex].highlight ? 'bg-violet-100/50' : ''}`}>
+                                                    <input 
+                                                        type="text"
+                                                        value={value}
+                                                        onChange={(e) => handleFeatureValueChange(featureIndex, valueIndex, e.target.value)}
+                                                        className={`${inputClasses} text-center`}
+                                                        aria-label={`Feature ${feature.name} for ${pricingData.tiers[valueIndex].name}`}
+                                                    />
+                                                </td>
+                                            ))}
+                                            <td className={`p-2 text-center ${pricingData.tiers.some(t => t.highlight) ? 'bg-violet-100/50' : ''}`}>
+                                                <button onClick={() => handleRemoveFeature(featureIndex)} className="text-gray-400 hover:text-red-500 p-1 rounded-full transition-colors" aria-label={`Remove feature ${feature.name}`}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    <tr className="bg-transparent">
+                                        <td></td>
+                                        {pricingData.tiers.map((tier, tierIndex) => (
+                                            <td key={tierIndex} className={`p-4 text-center ${tier.highlight ? 'bg-violet-100/50 rounded-b-lg' : ''}`}>
+                                                <button className={`w-full max-w-[150px] mx-auto py-2 font-bold rounded-lg transition-colors duration-300
+                                                    ${tier.highlight ? 'bg-primary text-white hover:bg-violet-700' : 'bg-secondary text-white hover:bg-violet-600'}`}>
+                                                    {tier.cta}
+                                                </button>
+                                            </td>
                                         ))}
-                                        <td className={`p-2 text-center ${pricingData.tiers.some(t => t.highlight) ? 'bg-violet-100/50' : ''}`}>
-                                            <button onClick={() => handleRemoveFeature(featureIndex)} className="text-gray-400 hover:text-red-500 p-1 rounded-full transition-colors" aria-label={`Remove feature ${feature.name}`}>
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
-                                        </td>
+                                        <td></td>
                                     </tr>
-                                ))}
-                                 <tr className="bg-transparent">
-                                     <td></td>
-                                     {pricingData.tiers.map((tier, tierIndex) => (
-                                         <td key={tierIndex} className={`p-4 text-center ${tier.highlight ? 'bg-violet-100/50 rounded-b-lg' : ''}`}>
-                                             <button className={`w-full max-w-[150px] mx-auto py-2 font-bold rounded-lg transition-colors duration-300
-                                                ${tier.highlight ? 'bg-primary text-white hover:bg-violet-700' : 'bg-secondary text-white hover:bg-violet-600'}`}>
-                                                 {tier.cta}
-                                             </button>
-                                         </td>
-                                     ))}
-                                     <td></td>
-                                 </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="mt-4 flex justify-end space-x-4">
-                        <button onClick={handleAddFeature} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
-                           + Add Feature
-                        </button>
-                        <button onClick={handleResetPricing} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
-                           Reset Pricing
-                        </button>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="mt-4 flex justify-end space-x-4">
+                            <button onClick={handleAddFeature} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                            + Add Feature
+                            </button>
+                            <button onClick={handleResetPricing} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                            Reset Pricing
+                            </button>
+                        </div>
                     </div>
                 </Section>
                 
@@ -443,66 +522,67 @@ const App: React.FC = () => {
                 </Section>
 
                 <Section id={SECTIONS[3].id} title={SECTIONS[3].title}>
-                     <div id="assumptions-grid" className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
-                            <SliderInput id="slider-newFreeSignups" label="New Free Sign-ups / mo" value={assumptions.newFreeSignups} onChange={v => handleAssumptionChange('newFreeSignups', v)} min={100} max={5000} step={100} tooltip={ASSUMPTION_TOOLTIPS.newFreeSignups} />
-                            <SliderInput label="Free-to-Paid Conversion" value={assumptions.freeToPaidConversion} onChange={v => handleAssumptionChange('freeToPaidConversion', v)} min={0.5} max={10} step={0.1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.freeToPaidConversion} />
-                            <SliderInput label="New Direct Paid Acqs / mo" value={assumptions.newDirectPaid} onChange={v => handleAssumptionChange('newDirectPaid', v)} min={0} max={50} step={1} tooltip={ASSUMPTION_TOOLTIPS.newDirectPaid} />
-                            <SliderInput label="Basic Plan Conversion" value={assumptions.basicPlanConversion} onChange={v => handleAssumptionChange('basicPlanConversion', v)} min={0} max={100} step={1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.basicPlanConversion} />
-                            <SliderInput label="Professional Plan Conversion" value={assumptions.professionalPlanConversion} onChange={v => handleAssumptionChange('professionalPlanConversion', v)} min={0} max={100} step={1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.professionalPlanConversion} />
-                            <SliderInput label="Enterprise Plan Conversion" value={assumptions.enterprisePlanConversion} onChange={v => handleAssumptionChange('enterprisePlanConversion', v)} min={0} max={100} step={1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.enterprisePlanConversion} />
-                            <SliderInput label="Basic Plan Avg. Users" value={assumptions.basicAvgUsers} onChange={v => handleAssumptionChange('basicAvgUsers', v)} min={1} max={5} step={0.1} tooltip={ASSUMPTION_TOOLTIPS.basicAvgUsers} />
-                            <SliderInput label="Professional Plan Avg. Users" value={assumptions.proAvgUsers} onChange={v => handleAssumptionChange('proAvgUsers', v)} min={2} max={20} step={0.5} tooltip={ASSUMPTION_TOOLTIPS.proAvgUsers} />
-                            <SliderInput label="Enterprise Plan Avg. MRR" value={assumptions.enterpriseAvgMRR} onChange={v => handleAssumptionChange('enterpriseAvgMRR', v)} min={200} max={2000} step={50} format="currency" tooltip={ASSUMPTION_TOOLTIPS.enterpriseAvgMRR} />
-                            <SliderInput label="Monthly Churn Rate" value={assumptions.monthlyChurnRate} onChange={v => handleAssumptionChange('monthlyChurnRate', v)} min={1} max={15} step={0.1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.monthlyChurnRate} />
-                            <SliderInput label="Upsell Rate (Basic to Pro)" value={assumptions.upsellRate} onChange={v => handleAssumptionChange('upsellRate', v)} min={0} max={5} step={0.1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.upsellRate} />
-                        </div>
-                     </div>
-                     <div className="mt-8">
-                        <div className="flex flex-col sm:flex-row sm:justify-end sm:items-center gap-3 mb-4">
-                            <button id="explain-ai-button" onClick={handleExplainClick} disabled={isGenerating} className="bg-accent hover:bg-violet-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isGenerating ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Analyzing...
-                                    </>
-                                ) : '✨ Explain with AI'}
-                            </button>
-                             <div id="download-buttons" className="flex flex-col sm:flex-row gap-3">
-                                <button onClick={downloadChart} className="bg-primary hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Download Chart</button>
-                                <button onClick={downloadData} className="bg-secondary hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Download Data</button>
+                     <div ref={projectionsSectionRef}>
+                        <div id="assumptions-grid" className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+                                <SliderInput id="slider-newFreeSignups" label="New Free Sign-ups / mo" value={assumptions.newFreeSignups} onChange={v => handleAssumptionChange('newFreeSignups', v)} min={100} max={5000} step={100} tooltip={ASSUMPTION_TOOLTIPS.newFreeSignups} />
+                                <SliderInput label="Free-to-Paid Conversion" value={assumptions.freeToPaidConversion} onChange={v => handleAssumptionChange('freeToPaidConversion', v)} min={0.5} max={10} step={0.1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.freeToPaidConversion} />
+                                <SliderInput label="New Direct Paid Acqs / mo" value={assumptions.newDirectPaid} onChange={v => handleAssumptionChange('newDirectPaid', v)} min={0} max={50} step={1} tooltip={ASSUMPTION_TOOLTIPS.newDirectPaid} />
+                                <SliderInput label="Basic Plan Conversion" value={assumptions.basicPlanConversion} onChange={v => handleAssumptionChange('basicPlanConversion', v)} min={0} max={100} step={1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.basicPlanConversion} />
+                                <SliderInput label="Professional Plan Conversion" value={assumptions.professionalPlanConversion} onChange={v => handleAssumptionChange('professionalPlanConversion', v)} min={0} max={100} step={1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.professionalPlanConversion} />
+                                <SliderInput label="Enterprise Plan Conversion" value={assumptions.enterprisePlanConversion} onChange={v => handleAssumptionChange('enterprisePlanConversion', v)} min={0} max={100} step={1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.enterprisePlanConversion} />
+                                <SliderInput label="Basic Plan Avg. Users" value={assumptions.basicAvgUsers} onChange={v => handleAssumptionChange('basicAvgUsers', v)} min={1} max={5} step={0.1} tooltip={ASSUMPTION_TOOLTIPS.basicAvgUsers} />
+                                <SliderInput label="Professional Plan Avg. Users" value={assumptions.proAvgUsers} onChange={v => handleAssumptionChange('proAvgUsers', v)} min={2} max={20} step={0.5} tooltip={ASSUMPTION_TOOLTIPS.proAvgUsers} />
+                                <SliderInput label="Enterprise Plan Avg. MRR" value={assumptions.enterpriseAvgMRR} onChange={v => handleAssumptionChange('enterpriseAvgMRR', v)} min={200} max={2000} step={50} format="currency" tooltip={ASSUMPTION_TOOLTIPS.enterpriseAvgMRR} />
+                                <SliderInput label="Monthly Churn Rate" value={assumptions.monthlyChurnRate} onChange={v => handleAssumptionChange('monthlyChurnRate', v)} min={1} max={15} step={0.1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.monthlyChurnRate} />
+                                <SliderInput label="Upsell Rate (Basic to Pro)" value={assumptions.upsellRate} onChange={v => handleAssumptionChange('upsellRate', v)} min={0} max={5} step={0.1} format="percent" tooltip={ASSUMPTION_TOOLTIPS.upsellRate} />
                             </div>
                         </div>
-                        {generationError && <div className="text-red-500 bg-red-100 p-3 rounded-lg mb-4 text-center">{generationError}</div>}
-                        
-                        <div id="charts-container" ref={chartRef}>
-                            <ChartTabsController
-                                data={projectionData}
-                                activeChart={activeChartType}
-                                setActiveChart={setActiveChartType}
-                            />
-                        </div>
-
-                        <div id="projection-table" className="mt-8">
-                            <div className="md:hidden text-sm text-gray-500 mb-2 text-center">
-                                <span className="inline-flex items-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                    Scroll to see all data
-                                </span>
-                            </div>
-                            <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-x-auto">
-                                <ProjectionTable data={projectionData.slice(0, visibleTableRows)} />
-                            </div>
-                             {visibleTableRows < projectionData.length && (
-                                <div className="mt-6 text-center">
-                                    <button onClick={handleShowMore} className="bg-secondary hover:bg-violet-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
-                                        Show More
-                                    </button>
+                        <div className="mt-8">
+                            <div className="flex flex-col sm:flex-row sm:justify-end sm:items-center gap-3 mb-4">
+                                <button id="explain-ai-button" onClick={handleExplainClick} disabled={isGenerating} className="bg-accent hover:bg-violet-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isGenerating ? (
+                                        <>
+                                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Analyzing...
+                                        </>
+                                    ) : '✨ Explain with AI'}
+                                </button>
+                                <div id="download-buttons">
+                                    <DownloadControl label="Download..." options={projectionDownloadOptions} />
                                 </div>
-                             )}
+                            </div>
+                            {generationError && <div className="text-red-500 bg-red-100 p-3 rounded-lg mb-4 text-center">{generationError}</div>}
+                            
+                            <div id="charts-container" ref={chartRef}>
+                                <ChartTabsController
+                                    data={projectionData}
+                                    activeChart={activeChartType}
+                                    setActiveChart={setActiveChartType}
+                                />
+                            </div>
+
+                            <div id="projection-table" className="mt-8">
+                                <div className="md:hidden text-sm text-gray-500 mb-2 text-center">
+                                    <span className="inline-flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                        Scroll to see all data
+                                    </span>
+                                </div>
+                                <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-x-auto">
+                                    <ProjectionTable data={projectionData.slice(0, visibleTableRows)} />
+                                </div>
+                                {visibleTableRows < projectionData.length && (
+                                    <div className="mt-6 text-center">
+                                        <button onClick={handleShowMore} className="bg-secondary hover:bg-violet-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                                            Show More
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                      </div>
                 </Section>
