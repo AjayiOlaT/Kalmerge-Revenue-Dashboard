@@ -1,0 +1,5 @@
+{
+  "name": "Kalmerge Interactive Revenue Dashboard",
+  "description": "A single-page, fully interactive, front-end web dashboard that visualizes Kalmerge's comprehensive revenue strategy, key metrics, and projections. Allows for dynamic manipulation of core assumptions and real-time recalculation of projections.",
+  "requestFramePermissions": []
+}
